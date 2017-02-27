@@ -5,10 +5,14 @@ services:
     ports:
       - 8080:80
     volumes:
+      # database configuration
       - ./data:/data
-      - ./wp-content/themes:/app/wp-content/themes
-      - ./wp-content/plugins:/app/wp-content/plugins
-      - ./wp-content/uploads:/app/wp-content/uploads
+      # development theme setup
+      - ./dist/wp-content/themes:/app/wp-content/themes
+      # development plugin setup
+      - ./dist/wp-content/plugins:/app/wp-content/plugins
+      # WordPress uploads folder
+      - ./dist/wp-content/uploads:/app/wp-content/uploads
     environment:
       DB_NAME: wordpress
       DB_PASS: root
@@ -29,7 +33,7 @@ services:
       THEMES: >-
         [local]Divi,
         [local]uw-oshkosh-divi
-
+      WP_DEBUG: 'true'
   db:
     image: mariadb:10 # or mysql:5.7
     volumes:

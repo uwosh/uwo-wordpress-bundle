@@ -1,211 +1,167 @@
-var fs          = require('fs');
-var gulp        = require('gulp');
-var runSequence = require('run-sequence');
+// Include gulp
+const gulp = require('gulp');
 
-// Project plugins
-var rev          = require('gulp-rev');
-var sass         = require('gulp-sass');
-var clean        = require('gulp-clean');
-var concat       = require('gulp-concat');
-var rename       = require('gulp-rename');
-var replace      = require('gulp-replace-task');
-var collect      = require('gulp-rev-collector');
-var imagemin     = require('gulp-imagemin');
-var pngquant     = require('imagemin-pngquant');
-var uglify       = require('gulp-uglify');
-var minifyCss    = require('gulp-minify-css');
-var awspublish   = require('gulp-awspublish');
-var autoprefixer = require('gulp-autoprefixer');
+// Include Our Plugins
+const jshint = require('gulp-jshint');
+const sass = require('gulp-sass');
+const uglify = require('gulp-uglify');
+const rename = require('gulp-rename');
+const copy = require('gulp-copy');
+const babel = require('gulp-babel');
+const imagemin = require('gulp-imagemin');
+const merge = require('merge-stream');
+const svgo = require('gulp-svgo');
+const mkdirp = require('gulp-mkdirp');
+const clean = require('gulp-clean');
+const runSequence = require('run-sequence');
+const autoprefixer = require('gulp-autoprefixer');
+const cleanCSS = require('gulp-clean-css');
+const gulpif = require('gulp-if');
+const scsslint = require('gulp-scss-lint');
+const browserSync = require('browser-sync').create();
+const watch = require('gulp-watch');
 
-// Configuration
-var config = require('./package.json').gulp;
-var themePath = 'wp-content/themes/' + config.theme;
-var distPath  = themePath + '/dist';
-var distPathAbsolute = '/' + distPath;
-var assetPath = themePath + '/assets';
+// Including the path to local WP development
+const localWPConfig = require('./config/local-wp-config.js');
 
-gulp.task(
-  'default',
-  [
-    'compile-styles',
-    'compile-scripts',
-    'compile-fonts',
-    'compile-images',
-    'compile-templates'
-  ],
-  function() {
-    gulp.watch(assetPath + '/scss/**/*.scss',  ['compile-styles']);
-    gulp.watch(assetPath + '/js/**/*.js',      ['compile-scripts']);
-    gulp.watch(assetPath + '/fonts/**/*',      ['compile-fonts']);
-    gulp.watch(assetPath + '/images/**/*',     ['compile-images']);
-    gulp.watch(assetPath + '/templates/**/*',  ['compile-templates']);
-  }
-);
+gulp.task('serve', function(){
+  // Building and piping the files before browserSync init
+  runSequence('build-theme', 'bs-init');
 
-gulp.task('deploy-assets', function (callback) {
-  runSequence(
-    'clean',
-    ['compile-styles', 'compile-scripts', 'compile-images', 'compile-fonts', 'compile-templates'],
-    ['optimize-styles', 'optimize-scripts', 'optimize-images'],
-    'version-assets',
-    ['replace-versioned-assets-in-assets', 'replace-versioned-assets-in-templates'],
-    'gzip-assets',
-    'publish-to-s3',
-    callback
-  );
+  // Watching all files in the src
+  return watch('src/**/*.*', function(){
+    runSequence('build-theme', 'bs-reload');
+  });
 });
 
-gulp.task('clean', function () {
-  return gulp.src([
-    distPath,
-    themePath + '/*.php'
-  ], {read: false})
-    .pipe(clean({force: true}));
+// Tasks for local WordPress development
+gulp.task('bs-init', function(){
+  browserSync.init({
+      proxy: localWPConfig.proxy
+  });
 });
 
-// Styles
-// ------
+gulp.task('bs-reload', function (){
+    browserSync.reload();
+});
 
-gulp.task('compile-styles', function () {
-  return (
-    gulp.src([
-      assetPath + '/scss/style.scss'
-    ])
+gulp.task('default', function(cb){
+  runSequence('build-theme');
+});
+
+gulp.task('build-theme', function(cb) {
+  runSequence('clean-theme',
+    ['style-theme', 'js-theme', 'images-theme', 'php-theme'],
+    ['js-theme-lint', 'theme-scss-lint'],
+    cb);
+});
+
+// Tasks for WordPress theme build
+gulp.task('clean-theme', function() {
+    return gulp.src(['dist/wp-content/themes/*', '!dist/wp-content/themes/index.php', '!dist/wp-content/themes/Divi'])
+        .pipe(clean());
+});
+
+// Building the CSS
+gulp.task('style-theme', function () {
+  return gulp.src('src/themes/**/*.scss')
     .pipe(sass().on('error', sass.logError))
     .pipe(autoprefixer({
-        browsers: ['last 2 versions'],
-        cascade: false
+      browsers: ['last 2 versions']
     }))
-    .pipe(gulp.dest(distPath + '/css'))
-  );
+    .pipe(cleanCSS({
+          keepSpecialComments: 1
+      }))
+    .pipe(gulp.dest('dist/wp-content/themes/'));
 });
 
-gulp.task('optimize-styles', function () {
-  return gulp.src(distPath + '/css/style.css')
-    .pipe(minifyCss())
-    .pipe(gulp.dest(distPath + '/css'));
+gulp.task('js-theme', function(){
+  return gulp.src('src/themes/**/js/**/*.js')
+      .pipe(babel({
+        presets: ['es2015']
+      }))
+      .pipe(uglify())
+      .pipe(gulp.dest('dist/wp-content/themes/'));
 });
 
-
-
-// Scripts
-// -------
-
-gulp.task('compile-scripts', function () {
-  return (
-    gulp.src([
-      assetPath + '/js/script.js'
-    ])
-    .pipe(concat('script.js'))
-    .pipe(gulp.dest(distPath + '/js'))
-  );
+gulp.task('images-theme', function(){
+  return gulp.src('src/themes/**/images/**/*')
+      .pipe(imagemin())
+      .pipe(gulp.dest('dist/wp-content/themes/'));
 });
 
-gulp.task('optimize-scripts', function () {
-  return gulp.src(distPath + '/js/script.js')
-    .pipe(uglify())
-    .pipe(gulp.dest(distPath + '/js/'));
+gulp.task('php-theme', function(){
+  return gulp.src('src/themes/**/**/*.php')
+      .pipe(gulp.dest('dist/wp-content/themes/'));
 });
 
-
-
-// Images
-// -------
-
-gulp.task('compile-images', function () {
-  return gulp.src(assetPath + '/images/**/*')
-    .pipe(gulp.dest(distPath + '/images'));
+gulp.task('js-theme-lint', function(){
+  return gulp.src('src/themes/**/js/*.js')
+      .pipe(jshint({
+        'esversion': 6
+      }))
+      .pipe(jshint.reporter('default'));
 });
 
-gulp.task('optimize-images', function () {
-  return gulp.src(distPath + '/images/**/*')
-    .pipe(imagemin({
-      progressive: true,
-      svgoPlugins: [{removeViewBox: false}],
-      use: [pngquant()]
-    }))
-    .pipe(gulp.dest(distPath + '/images'));
+gulp.task('theme-scss-lint', function() {
+  return gulp.src('src/themes/**/style/*.scss')
+    .pipe(scsslint({'config': 'config/scss-lint-config.yml'}));
 });
 
 
-
-// Fonts
-// -----
-
-gulp.task('compile-fonts', function () {
-  return gulp.src(assetPath + '/fonts/**/*')
-    .pipe(gulp.dest(distPath + '/fonts'));
-});
-
-
-
-// Templates
-// ---------
-
-gulp.task('compile-templates', function () {
-  return gulp.src(assetPath + '/templates/**/*')
-    .pipe(gulp.dest(themePath));
-});
-
-
-// versioning
-// -----------
-
-gulp.task('version-assets', function () {
-  return gulp.src(distPath + '/**/*')
-    .pipe(rev())
-    .pipe(gulp.dest(distPath))
-    .pipe(rev.manifest())
-    .pipe(gulp.dest(themePath));
-});
-
-gulp.task('replace-versioned-assets-in-assets', function () {
-  var dirReplacements = {};
-  dirReplacements[distPathAbsolute] = config.productionAssetURL;
-
-  return gulp.src([
-      themePath + '/**/*.json',
-      distPath + '/**/*.css',
-      distPath + '/**/*.js'
-    ])
-    .pipe(collect({ replaceReved: true, dirReplacements: dirReplacements }))
-    .pipe(gulp.dest(distPath));
-});
-
-gulp.task('replace-versioned-assets-in-templates', function () {
-  var dirReplacements = {};
-  dirReplacements[distPathAbsolute] = config.productionAssetURL;
-
-  return gulp.src([
-      themePath + '/**/*.json',
-      themePath + '/*.php'
-    ])
-    .pipe(collect({ replaceReved: true, dirReplacements: dirReplacements }))
-    .pipe(gulp.dest(themePath));
-});
-
-
-
-// S3
-// --
-
-gulp.task('gzip-assets', function () {
-  return gulp.src([
-      '!' + distPath + '/**/*.gz',
-      distPath + '/**/*'
-    ])
-    .pipe(awspublish.gzip({ ext: '.gz' }))
-    .pipe(gulp.dest(distPath));
-});
-
-gulp.task('publish-to-s3', function () {
-  var publisher = awspublish.create(config.aws);
-  var headers = {
-    'Cache-Control': 'max-age=31536000, no-transform, public'
-  };
-
-  return gulp.src(distPath + '/**')
-    .pipe(publisher.publish(headers))
-    .pipe(publisher.sync())
-    .pipe(awspublish.reporter());
-});
+// // Tasks for the WordPressplugin plugin build
+// gulp.task('build-plugin', function(cb) {
+//   runSequence('plugin-clean', ['plugin-style', 'plugin-js', 'plugin-images', 'plugin-php'], ['plugin-js-lint', 'plugin-scss-lint'], cb);
+// });
+//
+// // Tasks for WordPress theme build
+// gulp.task('plugin-clean', function() {
+//     return gulp.src('dist/wp-content/plugins/')
+//         .pipe(clean());
+// });
+//
+// // Building the CSS
+// gulp.task('plugin-style', function () {
+//   return gulp.src('src/plugins/**/*.scss')
+//     .pipe(sass().on('error', sass.logError))
+//     .pipe(autoprefixer({
+//       browsers: ['last 2 versions']
+//     }))
+//     .pipe(cleanCSS({
+//           keepSpecialComments: 1
+//       }))
+//     .pipe(gulp.dest('dist/wp-content/plugins/'));
+// });
+//
+// gulp.task('plugin-js', function(){
+//   return gulp.src('src/plugins/**/js/**/*.js')
+//       .pipe(babel({
+//         presets: ['es2015']
+//       }))
+//       .pipe(uglify())
+//       .pipe(gulp.dest('dist/wp-content/plugins/'));
+// });
+//
+// gulp.task('plugin-images', function(){
+//   return gulp.src('src/plugins/**/img/**/*')
+//       .pipe(imagemin())
+//       .pipe(gulp.dest('dist/wp-content/plugins/'));
+// });
+//
+// gulp.task('plugin-php', function(){
+//   return gulp.src('src/plugins/**/**/*.php')
+//       .pipe(gulp.dest('dist/wp-content/plugins/'));
+// });
+//
+// gulp.task('plugin-js-lint', function(){
+//   return gulp.src('src/plugins/**/js/*.js')
+//       .pipe(jshint({
+//         'esversion': 6
+//       }))
+//       .pipe(jshint.reporter('default'));
+// });
+//
+// gulp.task('plugin-scss-lint', function() {
+//   return gulp.src('src/plugins/**/style/*.scss')
+//     .pipe(scsslint({'config': 'config/scss-lint-config.yml'}));
+// });
