@@ -41,5 +41,7 @@ That's it! You should now have everything needed to use the UWO WordPress Bundle
 Finally, start the UWO WordPress Bundle with `docker-compose up`.
 
 In a separate bash window, there are two main Gulp commands you may run.
+
 1. `gulp` - builds the project
+
 2. `gulp serve` - builds the project, opens the site in your web browser, and starts a watch on your `src` folder.
