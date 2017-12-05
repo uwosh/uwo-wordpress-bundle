@@ -24,6 +24,9 @@ const watch = require('gulp-watch');
 // Including the path to local WP development
 const localWPConfig = require('./config/local-wp-config.js');
 
+// defining the paths to the plugins
+let plugins = ['dist/wp-content/plugins/wp-plugin'];
+
 gulp.task('serve', function(){
   // Building and piping the files before browserSync init
   runSequence('build-theme', 'bs-init');
@@ -109,59 +112,17 @@ gulp.task('theme-scss-lint', function() {
 });
 
 
-// // Tasks for the WordPressplugin plugin build
-// gulp.task('build-plugin', function(cb) {
-//   runSequence('plugin-clean', ['plugin-style', 'plugin-js', 'plugin-images', 'plugin-php'], ['plugin-js-lint', 'plugin-scss-lint'], cb);
-// });
-//
-// // Tasks for WordPress theme build
-// gulp.task('plugin-clean', function() {
-//     return gulp.src('dist/wp-content/plugins/')
-//         .pipe(clean());
-// });
-//
-// // Building the CSS
-// gulp.task('plugin-style', function () {
-//   return gulp.src('src/plugins/**/*.scss')
-//     .pipe(sass().on('error', sass.logError))
-//     .pipe(autoprefixer({
-//       browsers: ['last 2 versions']
-//     }))
-//     .pipe(cleanCSS({
-//           keepSpecialComments: 1
-//       }))
-//     .pipe(gulp.dest('dist/wp-content/plugins/'));
-// });
-//
-// gulp.task('plugin-js', function(){
-//   return gulp.src('src/plugins/**/js/**/*.js')
-//       .pipe(babel({
-//         presets: ['es2015']
-//       }))
-//       .pipe(uglify())
-//       .pipe(gulp.dest('dist/wp-content/plugins/'));
-// });
-//
-// gulp.task('plugin-images', function(){
-//   return gulp.src('src/plugins/**/img/**/*')
-//       .pipe(imagemin())
-//       .pipe(gulp.dest('dist/wp-content/plugins/'));
-// });
-//
-// gulp.task('plugin-php', function(){
-//   return gulp.src('src/plugins/**/**/*.php')
-//       .pipe(gulp.dest('dist/wp-content/plugins/'));
-// });
-//
-// gulp.task('plugin-js-lint', function(){
-//   return gulp.src('src/plugins/**/js/*.js')
-//       .pipe(jshint({
-//         'esversion': 6
-//       }))
-//       .pipe(jshint.reporter('default'));
-// });
-//
-// gulp.task('plugin-scss-lint', function() {
-//   return gulp.src('src/plugins/**/style/*.scss')
-//     .pipe(scsslint({'config': 'config/scss-lint-config.yml'}));
-// });
+// Tasks for the WordPressplugin plugin build
+gulp.task('build-plugins', function(cb){
+  runSequence('clean-plugin', 'copy-plugin', cb);
+});
+
+gulp.task('clean-plugin', function() {
+    return gulp.src(plugins)
+        .pipe(clean());
+});
+
+gulp.task('copy-plugin', function(cp) {
+  return gulp.src(['src/plugins/**'])
+        .pipe(gulp.dest('dist/wp-content/plugins/'));
+});
